@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diyet & Aktivite Takip</title>
+<style>
+  /* ===========================================================
+     RENK DEĞİŞKENLERİ (Açık tema varsayılan; karanlık mod override eder)
+  ============================================================ */
+  :root{
+    --bg:#f2f4f7; --card:#ffffff; --text:#1f2937; --muted:#6b7280;
+    --border:#e5e7eb; --primary:#2563eb; --primary-soft:#dbeafe;
+    --green:#16a34a; --green-soft:#dcfce7; --red:#dc2626; --orange:#ea580c;
+    --shadow:0 1px 3px rgba(0,0,0,.08);
+  }
+  html[data-theme="dark"]{
+    --bg:#0f172a; --card:#1e293b; --text:#e2e8f0; --muted:#94a3b8;
+    --border:#334155; --primary:#3b82f6; --primary-soft:#1e3a5f;
+    --green:#22c55e; --green-soft:#143524; --red:#ef4444; --orange:#f97316;
+    --shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.5;transition:background .25s,color .25s;}
+  .wrap{max-width:780px;margin:0 auto;padding:16px;}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+  header h1{font-size:1.35rem;margin:0;}
+  .theme-btn{background:var(--card);border:1px solid var(--border);color:var(--text);
+    padding:8px 12px;border-radius:10px;cursor:pointer;font-size:.9rem;box-shadow:var(--shadow);}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;
+    padding:16px;margin-bottom:16px;box-shadow:var(--shadow);}
+  .card h2{font-size:1.05rem;margin:0 0 12px;}
+  .card h3{font-size:.95rem;margin:14px 0 8px;color:var(--muted);}
+  label{display:block;font-size:.85rem;color:var(--muted);margin:0 0 4px;}
+  input,select,button{font-family:inherit;font-size:.95rem;}
+  input[type="text"],input[type="number"],input[type="date"],select{
+    width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);}
+  .row{display:flex;gap:8px;flex-wrap:wrap;}
+  .row > *{flex:1;min-width:0;}
+  .btn{background:var(--primary);color:#fff;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600;}
+  .btn:hover{opacity:.92;}
+  .btn-ghost{background:var(--primary-soft);color:var(--primary);border:none;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:600;}
+  .item{display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:8px 10px;border:1px solid var(--border);border-radius:10px;margin-bottom:6px;font-size:.9rem;}
+  .item .ico{cursor:pointer;font-weight:700;padding:0 4px;}
+  .item .ico.edit{color:var(--primary);}
+  .item .ico.del{color:var(--red);}
+  .empty{color:var(--muted);font-size:.85rem;font-style:italic;}
+  .summary{display:flex;gap:10px;flex-wrap:wrap;}
+  .stat{flex:1;min-width:110px;text-align:center;padding:12px;border-radius:12px;background:var(--bg);border:1px solid var(--border);}
+  .stat .n{font-size:1.5rem;font-weight:700;}
+  .stat .l{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+  .pos{color:var(--red);} .neg{color:var(--green);}
+  .tip{background:var(--primary-soft);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:.9rem;}
+  .hist-row{display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:10px;border-bottom:1px solid var(--border);font-size:.9rem;cursor:pointer;}
+  .hist-row:hover{background:var(--bg);} .hist-row:last-child{border-bottom:none;}
+  .badge{font-size:.78rem;padding:2px 8px;border-radius:20px;font-weight:600;}
+  .badge.pos{background:rgba(220,38,38,.12);} .badge.neg{background:rgba(22,163,74,.12);}
+  canvas{width:100%;height:auto;display:block;}
+  .muted{color:var(--muted);font-size:.85rem;}
+  /* Öğün planı bloğu */
+  .meal{border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:8px;}
+  .meal .mh{display:flex;justify-content:space-between;font-weight:600;margin-bottom:4px;}
+  .meal ul{margin:4px 0 0;padding-left:18px;font-size:.88rem;}
+  .goalbox{background:var(--green-soft);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:.9rem;}
+  .warn{background:rgba(234,88,12,.12);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:.88rem;}
+  /* Kaydedildi bildirimi (toast) */
+  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--green);color:#fff;padding:10px 18px;border-radius:30px;font-weight:600;font-size:.9rem;
+    opacity:0;pointer-events:none;transition:all .25s;box-shadow:0 4px 12px rgba(0,0,0,.2);z-index:99;}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>🥗 Diyet & Aktivite Takip</h1>
+    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙 Karanlık Mod</button>
+  </header>
+
+  <!-- ============ HEDEF & PROFİL ============ -->
+  <div class="card">
+    <h2>🎯 Kilo Verme Hedefi & Profil</h2>
+    <div class="row">
+      <div><label>Kilo (kg)</label><input type="number" id="pWeight" min="0" step="0.1" placeholder="örn. 85"></div>
+      <div><label>Boy (cm)</label><input type="number" id="pHeight" min="0" placeholder="örn. 178"></div>
+      <div><label>Yaş</label><input type="number" id="pAge" min="0" placeholder="örn. 35"></div>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <div><label>Cinsiyet</label>
+        <select id="pGender"><option value="male">Erkek</option><option value="female">Kadın</option></select>
+      </div>
+      <div><label>Hareket düzeyi</label>
+        <select id="pActivity">
+          <option value="1.2">Hareketsiz (masa başı)</option>
+          <option value="1.375" selected>Az hareketli (haftada 1-3 spor)</option>
+          <option value="1.55">Orta (haftada 3-5 spor)</option>
+          <option value="1.725">Çok hareketli (haftada 6-7)</option>
+        </select>
+      </div>
+    </div>
+    <h3>Hedef</h3>
+    <div class="row">
+      <div><label>Vermek istediğin kilo (kg)</label><input type="number" id="gLoss" min="0" step="0.1" placeholder="örn. 6"></div>
+      <div><label>Süre (gün)</label><input type="number" id="gDays" min="1" placeholder="örn. 60"></div>
+    </div>
+    <button class="btn" style="margin-top:12px;width:100%;" onclick="savePlan()">Hedefi Hesapla & Kaydet</button>
+    <div id="planResult" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- ============ TARİH SEÇİMİ ============ -->
+  <div class="card">
+    <h2>📆 Gün Seç</h2>
+    <div class="row" style="align-items:flex-end;">
+      <div style="flex:2;"><label>Tarih</label><input type="date" id="datePicker" onchange="loadDay()"></div>
+      <div style="flex:1;"><button class="btn" style="width:100%;" onclick="goToday()">Bugün</button></div>
+    </div>
+    <p class="muted" id="dayLabel" style="margin:10px 0 0;"></p>
+  </div>
+
+  <!-- ============ YEMEK ============ -->
+  <div class="card">
+    <h2>🍽️ Yenen Yemekler</h2>
+    <label>Hazır listeden seç (kaloriyi otomatik doldurur)</label>
+    <select id="presetSelect" onchange="fillPreset()"><option value="">— Hazır yemek seç —</option></select>
+    <div class="row" style="margin-top:10px;">
+      <div style="flex:2;"><label>Yemek adı</label><input type="text" id="foodName" placeholder="örn. Tavuk göğsü"></div>
+      <div style="flex:1;"><label>Kalori</label><input type="number" id="foodCal" min="0" placeholder="kcal"></div>
+    </div>
+    <button class="btn" id="foodBtn" style="margin-top:10px;" onclick="addFood()">+ Yemek Ekle</button>
+    <h3>Eklenenler</h3>
+    <div id="foodList"></div>
+  </div>
+
+  <!-- ============ ADIM ============ -->
+  <div class="card">
+    <h2>🚶 Adım Sayısı</h2>
+    <label>Bugün atılan toplam adım</label>
+    <input type="number" id="stepInput" min="0" placeholder="örn. 8000" oninput="saveSteps()">
+    <p class="muted" id="stepBurn"></p>
+  </div>
+
+  <!-- ============ SPOR ============ -->
+  <div class="card">
+    <h2>🏃 Yapılan Sporlar</h2>
+    <div class="row">
+      <div style="flex:2;"><label>Spor türü</label><select id="sportType"></select></div>
+      <div style="flex:1;"><label>Süre (dk)</label><input type="number" id="sportMin" min="0" placeholder="dakika"></div>
+    </div>
+    <button class="btn" id="sportBtn" style="margin-top:10px;" onclick="addSport()">+ Spor Ekle</button>
+    <h3>Eklenenler</h3>
+    <div id="sportList"></div>
+  </div>
+
+  <!-- ============ GÜNLÜK ÖZET ============ -->
+  <div class="card">
+    <h2>📊 Günlük Özet</h2>
+    <div class="summary">
+      <div class="stat"><div class="n" id="sIntake">0</div><div class="l">Alınan</div></div>
+      <div class="stat"><div class="n" id="sBurn">0</div><div class="l">Yakılan</div></div>
+      <div class="stat"><div class="n" id="sNet">0</div><div class="l">Net (±)</div></div>
+      <div class="stat"><div class="n" id="sTarget">—</div><div class="l">Hedef alım</div></div>
+    </div>
+    <p class="muted" id="netExplain" style="margin-top:12px;"></p>
+  </div>
+
+  <!-- ============ ERTESİ GÜN PROGRAMI ============ -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">🍱 Ertesi Gün İçin Program</h2>
+      <button class="btn-ghost" onclick="render()">🔄 Planı Yenile</button>
+    </div>
+    <div id="tomorrowPlan" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- ============ GRAFİK ============ -->
+  <div class="card">
+    <h2>📈 Son 7 Gün (Net Kalori)</h2>
+    <canvas id="chart" width="700" height="240"></canvas>
+    <p class="muted">Kırmızı = kalori fazlası, yeşil = kalori açığı (kilo verme yönünde).</p>
+  </div>
+
+  <!-- ============ GEÇMİŞ ============ -->
+  <div class="card">
+    <h2>🗂️ Geçmiş Kayıtlar</h2>
+    <div id="history"></div>
+  </div>
+
+  <p class="muted" style="text-align:center;">Verileriniz yalnızca bu tarayıcıda (localStorage) saklanır.</p>
+</div>
+
+<div id="toast">Kaydedildi ✓</div>
+
+<script>
+/* ===========================================================================
+   VERİ MODELİ (localStorage anahtarı: "diyetTakip")
+   {
+     profile: {weight, height, age, gender, activity},
+     plan:    {lossKg, days, startDate},
+     theme,
+     days: { "2026-06-22": {foods:[{name,cal}], steps, sports:[{type,min,cal}]} }
+   }
+=========================================================================== */
+const STORE_KEY = "diyetTakip";
+
+// Spor türleri → yaklaşık kcal/dk (~70 kg birey)
+const SPORTS = {
+  "Yürüyüş":4,"Tempolu yürüyüş":5,"Koşu":10,"Bisiklet":8,"Yüzme":9,
+  "Fitness / Ağırlık":6,"Yoga / Pilates":3,"Futbol / Basketbol":8,"Dans / Zumba":7,"İp atlama":12
+};
+const KCAL_PER_STEP = 0.04;           // 1000 adım ≈ 40 kcal
+const KCAL_PER_KG   = 7700;           // 1 kg yağ ≈ 7700 kcal
+
+// Hazır yemek listesi (yaklaşık porsiyon kalorileri)
+const PRESET_FOODS = [
+  ["Tavuk göğsü (1 porsiyon)",250],["Kırmızı et (1 porsiyon)",300],["Balık (1 porsiyon)",220],
+  ["Pilav (1 kase)",280],["Makarna (1 tabak)",350],["Ekmek (1 dilim)",80],["Yumurta (1 adet)",78],
+  ["Yoğurt (1 kase)",120],["Peynir (1 dilim)",90],["Salata (sade)",60],["Çorba (1 kase)",150],
+  ["Meyve (1 porsiyon)",90],["Muz (1 adet)",105],["Elma (1 adet)",95],["Hamburger",550],
+  ["Pizza (1 dilim)",285],["Döner (1 porsiyon)",600],["Kahve (sütsüz)",5],["Çay (şekersiz)",2],["Bir avuç kuruyemiş",180]
+];
+
+// Öğün planı için öğün bazlı yemek bankası
+const MEAL_BANK = {
+  "Kahvaltı":[
+    {name:"Haşlanmış yumurta (2 adet)",cal:156},{name:"Beyaz peynir (1 dilim)",cal:90},
+    {name:"Zeytin (5 adet)",cal:45},{name:"Tam buğday ekmeği (1 dilim)",cal:70},
+    {name:"Domates-salatalık",cal:30},{name:"Yulaf ezmesi (1 kase)",cal:150},
+    {name:"Süt (1 bardak)",cal:120},{name:"Mevsim meyvesi",cal:90}
+  ],
+  "Öğle":[
+    {name:"Izgara tavuk (1 porsiyon)",cal:250},{name:"Bulgur pilavı (1 kase)",cal:220},
+    {name:"Mercimek çorbası (1 kase)",cal:150},{name:"Yeşil salata (zeytinyağlı)",cal:90},
+    {name:"Yoğurt (1 kase)",cal:120},{name:"Zeytinyağlı sebze (1 porsiyon)",cal:160},
+    {name:"Izgara köfte (1 porsiyon)",cal:280},{name:"Ton balıklı salata",cal:200}
+  ],
+  "Ara öğün":[
+    {name:"Mevsim meyvesi (1 adet)",cal:90},{name:"Yoğurt (1 kase)",cal:120},
+    {name:"Bir avuç badem",cal:160},{name:"Çiğ sebze (havuç/salatalık)",cal:40},{name:"Kuru meyve (az)",cal:100}
+  ],
+  "Akşam":[
+    {name:"Izgara balık (1 porsiyon)",cal:220},{name:"Fırın sebze (1 porsiyon)",cal:150},
+    {name:"Tavuk sote (1 porsiyon)",cal:240},{name:"Sebze çorbası (1 kase)",cal:150},
+    {name:"Mevsim salatası",cal:70},{name:"Cacık (1 kase)",cal:100}
+  ]
+};
+// Öğün başına hedef kalori payı (toplam = 1.0)
+const MEAL_SHARE = {"Kahvaltı":0.25,"Öğle":0.30,"Ara öğün":0.10,"Akşam":0.35};
+
+let db, currentDate;
+let editFoodIdx = -1, editSportIdx = -1;  // düzenleme durumu
+
+/* ---------- Depolama ---------- */
+function loadDB(){
+  const raw = localStorage.getItem(STORE_KEY);
+  db = raw ? JSON.parse(raw) : {};
+  if(!db.days) db.days = {};
+  if(!db.profile) db.profile = {};
+  if(!db.plan) db.plan = null;
+}
+function saveDB(){ localStorage.setItem(STORE_KEY, JSON.stringify(db)); }
+function dayData(){
+  if(!db.days[currentDate]) db.days[currentDate] = {foods:[],steps:0,sports:[]};
+  return db.days[currentDate];
+}
+function todayStr(){
+  const d=new Date(), off=d.getTimezoneOffset();
+  return new Date(d.getTime()-off*60000).toISOString().slice(0,10);
+}
+function addDays(str,n){
+  const d=new Date(str+"T00:00:00"); d.setDate(d.getDate()+n);
+  return d.toISOString().slice(0,10);
+}
+function toast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg||"Kaydedildi ✓"; t.classList.add("show");
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),1500);
+}
+
+/* ===========================================================================
+   PLAN HESABI (BMR / TDEE / günlük hedef)  — Mifflin-St Jeor formülü
+=========================================================================== */
+function computePlan(){
+  const p=db.profile;
+  if(!p.weight||!p.height||!p.age) return {valid:false};
+  // BMR
+  let bmr = 10*p.weight + 6.25*p.height - 5*p.age + (p.gender==="female"?-161:5);
+  const tdee = Math.round(bmr * (p.activity||1.375));   // günlük toplam harcama
+
+  let res={valid:true, bmr:Math.round(bmr), tdee, hasGoal:false};
+
+  if(db.plan && db.plan.lossKg>0 && db.plan.days>0){
+    const deficitNeeded = Math.round((db.plan.lossKg*KCAL_PER_KG)/db.plan.days); // günlük gereken açık
+    const minCal = p.gender==="female"?1200:1500;       // güvenli alt sınır
+    let target = tdee - deficitNeeded;
+    let warning="";
+    if(target < minCal){
+      target = minCal;
+      warning = `Bu hedef için günde ${deficitNeeded} kcal açık gerekiyor; bu da sağlıklı alt sınırın (${minCal} kcal) altına iner. Hedefi biraz daha uzun bir süreye yaymanı öneririm.`;
+    }
+    const weeklyLoss = (db.plan.lossKg/db.plan.days)*7;
+    if(weeklyLoss > 1) warning += (warning?" ":"") + `Haftalık ${weeklyLoss.toFixed(1)} kg hedefliyorsun; sağlıklı hız genelde 0,5–1 kg/haftadır.`;
+    res = {...res, hasGoal:true, deficitNeeded, dailyTarget:Math.round(target),
+           weeklyLoss, endDate:addDays(db.plan.startDate, db.plan.days), minCal, warning};
+  } else {
+    res.dailyTarget = tdee;  // hedef yoksa: kiloyu koruma seviyesi
+  }
+  return res;
+}
+// Günlük hedef alım (öneri ve özet için). Profil yoksa 2000 varsayar.
+function dailyTarget(){ const pl=computePlan(); return pl.valid?pl.dailyTarget:2000; }
+
+/* ===========================================================================
+   BAŞLATMA
+=========================================================================== */
+function init(){
+  loadDB();
+  if(db.theme==="dark") setTheme("dark");
+
+  // Hazır yemek menüsü
+  const ps=document.getElementById("presetSelect");
+  PRESET_FOODS.forEach((f,i)=>{const o=document.createElement("option");o.value=i;o.textContent=f[0]+" — "+f[1]+" kcal";ps.appendChild(o);});
+  // Spor menüsü
+  const st=document.getElementById("sportType");
+  Object.keys(SPORTS).forEach(k=>{const o=document.createElement("option");o.value=k;o.textContent=k+" (~"+SPORTS[k]+" kcal/dk)";st.appendChild(o);});
+
+  // Profil & plan formunu doldur
+  const p=db.profile;
+  if(p.weight)  document.getElementById("pWeight").value=p.weight;
+  if(p.height)  document.getElementById("pHeight").value=p.height;
+  if(p.age)     document.getElementById("pAge").value=p.age;
+  if(p.gender)  document.getElementById("pGender").value=p.gender;
+  if(p.activity)document.getElementById("pActivity").value=p.activity;
+  if(db.plan){
+    document.getElementById("gLoss").value=db.plan.lossKg;
+    document.getElementById("gDays").value=db.plan.days;
+  }
+
+  currentDate=todayStr();
+  document.getElementById("datePicker").value=currentDate;
+  renderPlan();
+  render();
+}
+
+/* ===========================================================================
+   PLAN KAYDET
+=========================================================================== */
+function savePlan(){
+  db.profile={
+    weight:parseFloat(document.getElementById("pWeight").value)||0,
+    height:parseFloat(document.getElementById("pHeight").value)||0,
+    age:parseInt(document.getElementById("pAge").value)||0,
+    gender:document.getElementById("pGender").value,
+    activity:parseFloat(document.getElementById("pActivity").value)||1.375
+  };
+  const loss=parseFloat(document.getElementById("gLoss").value)||0;
+  const days=parseInt(document.getElementById("gDays").value)||0;
+  if(loss>0 && days>0){
+    // Mevcut başlangıç tarihini koru; yoksa bugünden başlat
+    const start = (db.plan && db.plan.startDate) ? db.plan.startDate : todayStr();
+    db.plan={lossKg:loss, days:days, startDate:start};
+  }
+  saveDB(); toast("Hedef kaydedildi ✓");
+  renderPlan(); render();
+}
+
+function renderPlan(){
+  const pl=computePlan();
+  const el=document.getElementById("planResult");
+  if(!pl.valid){
+    el.innerHTML='<p class="muted">Kişiye özel hedef için kilo, boy ve yaş girip kaydedin.</p>';
+    return;
+  }
+  let h=`<div class="goalbox">
+    <b>Günlük yakım (TDEE):</b> ~${pl.tdee} kcal &nbsp;|&nbsp; <b>Bazal (BMR):</b> ~${pl.bmr} kcal`;
+  if(pl.hasGoal){
+    h+=`<br><b>Hedef:</b> ${db.plan.days} günde ${db.plan.lossKg} kg → günde ~${pl.deficitNeeded} kcal açık gerekli.
+        <br><b>Önerilen günlük alım:</b> <span style="font-size:1.1rem;font-weight:700;">${pl.dailyTarget} kcal</span>
+        <br><b>Tahmini bitiş:</b> ${new Date(pl.endDate+'T00:00:00').toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'})} (≈ ${pl.weeklyLoss.toFixed(1)} kg/hafta)`;
+  } else {
+    h+=`<br>Kilonu korumak için günde ~${pl.dailyTarget} kcal. Kilo vermek için yukarıya hedef gir.`;
+  }
+  h+=`</div>`;
+  if(pl.warning) h+=`<div class="warn">⚠️ ${pl.warning}</div>`;
+  el.innerHTML=h;
+}
+
+/* ===========================================================================
+   TARİH
+=========================================================================== */
+function loadDay(){ currentDate=document.getElementById("datePicker").value||todayStr(); resetEdit(); render(); }
+function goToday(){ currentDate=todayStr(); document.getElementById("datePicker").value=currentDate; resetEdit(); render(); }
+
+/* ===========================================================================
+   YEMEK (ekle / düzenle / sil)
+=========================================================================== */
+function fillPreset(){
+  const i=document.getElementById("presetSelect").value; if(i==="")return;
+  document.getElementById("foodName").value=PRESET_FOODS[i][0];
+  document.getElementById("foodCal").value=PRESET_FOODS[i][1];
+}
+function addFood(){
+  const name=document.getElementById("foodName").value.trim();
+  const cal=parseInt(document.getElementById("foodCal").value);
+  if(!name||isNaN(cal)){alert("Lütfen yemek adı ve kalori girin.");return;}
+  if(editFoodIdx>=0){ dayData().foods[editFoodIdx]={name,cal}; }  // güncelle
+  else { dayData().foods.push({name,cal}); }                      // yeni ekle
+  saveDB(); toast();
+  document.getElementById("foodName").value=""; document.getElementById("foodCal").value="";
+  document.getElementById("presetSelect").value="";
+  resetEdit(); render();
+}
+function editFood(i){
+  const f=dayData().foods[i];
+  document.getElementById("foodName").value=f.name;
+  document.getElementById("foodCal").value=f.cal;
+  editFoodIdx=i;
+  document.getElementById("foodBtn").textContent="✓ Güncelle";
+  document.getElementById("foodName").scrollIntoView({behavior:"smooth",block:"center"});
+}
+function removeFood(i){ dayData().foods.splice(i,1); saveDB(); toast("Silindi ✓"); resetEdit(); render(); }
+
+/* ===========================================================================
+   ADIM
+=========================================================================== */
+function saveSteps(){
+  dayData().steps=parseInt(document.getElementById("stepInput").value)||0;
+  saveDB(); renderSummary(); renderStepBurn(); renderTomorrow(); renderChart();
+}
+
+/* ===========================================================================
+   SPOR (ekle / düzenle / sil)
+=========================================================================== */
+function addSport(){
+  const type=document.getElementById("sportType").value;
+  const min=parseInt(document.getElementById("sportMin").value);
+  if(!type||isNaN(min)||min<=0){alert("Lütfen spor türü ve süre girin.");return;}
+  const cal=Math.round(SPORTS[type]*min);
+  if(editSportIdx>=0){ dayData().sports[editSportIdx]={type,min,cal}; }
+  else { dayData().sports.push({type,min,cal}); }
+  saveDB(); toast();
+  document.getElementById("sportMin").value="";
+  resetEdit(); render();
+}
+function editSport(i){
+  const s=dayData().sports[i];
+  document.getElementById("sportType").value=s.type;
+  document.getElementById("sportMin").value=s.min;
+  editSportIdx=i;
+  document.getElementById("sportBtn").textContent="✓ Güncelle";
+  document.getElementById("sportType").scrollIntoView({behavior:"smooth",block:"center"});
+}
+function removeSport(i){ dayData().sports.splice(i,1); saveDB(); toast("Silindi ✓"); resetEdit(); render(); }
+
+function resetEdit(){
+  editFoodIdx=-1; editSportIdx=-1;
+  document.getElementById("foodBtn").textContent="+ Yemek Ekle";
+  document.getElementById("sportBtn").textContent="+ Spor Ekle";
+}
+
+/* ===========================================================================
+   HESAPLAMALAR
+=========================================================================== */
+function calcIntake(d){return d.foods.reduce((s,f)=>s+f.cal,0);}
+function calcStepBurn(d){return Math.round((d.steps||0)*KCAL_PER_STEP);}
+function calcSportBurn(d){return d.sports.reduce((s,x)=>s+x.cal,0);}
+function calcBurn(d){return calcStepBurn(d)+calcSportBurn(d);}
+function calcNet(d){return calcIntake(d)-calcBurn(d);}
+
+/* ===========================================================================
+   RENDER
+=========================================================================== */
+function render(){
+  const d=dayData();
+  const dt=new Date(currentDate+"T00:00:00");
+  document.getElementById("dayLabel").textContent="Seçili gün: "+dt.toLocaleDateString("tr-TR",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+  document.getElementById("stepInput").value=d.steps||"";
+
+  // Yemek listesi (düzenle + sil ikonlu)
+  const fl=document.getElementById("foodList"); fl.innerHTML="";
+  if(d.foods.length===0) fl.innerHTML='<p class="empty">Henüz yemek eklenmedi.</p>';
+  else d.foods.forEach((f,i)=>{fl.innerHTML+=`<div class="item"><span>${escapeHtml(f.name)}</span>
+    <span><b>${f.cal} kcal</b> <span class="ico edit" onclick="editFood(${i})">✎</span><span class="ico del" onclick="removeFood(${i})">✕</span></span></div>`;});
+
+  // Spor listesi
+  const sl=document.getElementById("sportList"); sl.innerHTML="";
+  if(d.sports.length===0) sl.innerHTML='<p class="empty">Henüz spor eklenmedi.</p>';
+  else d.sports.forEach((x,i)=>{sl.innerHTML+=`<div class="item"><span>${escapeHtml(x.type)} — ${x.min} dk</span>
+    <span><b>${x.cal} kcal</b> <span class="ico edit" onclick="editSport(${i})">✎</span><span class="ico del" onclick="removeSport(${i})">✕</span></span></div>`;});
+
+  renderStepBurn(); renderSummary(); renderTomorrow(); renderChart(); renderHistory();
+}
+function renderStepBurn(){
+  document.getElementById("stepBurn").textContent="Bu adımlarla yaklaşık "+calcStepBurn(dayData())+" kcal yaktınız.";
+}
+function renderSummary(){
+  const d=dayData(), intake=calcIntake(d), burn=calcBurn(d), net=intake-burn, tgt=dailyTarget();
+  document.getElementById("sIntake").textContent=intake;
+  document.getElementById("sBurn").textContent=burn;
+  const netEl=document.getElementById("sNet");
+  netEl.textContent=(net>0?"+":"")+net; netEl.className="n "+(net>0?"pos":"neg");
+  document.getElementById("sTarget").textContent=tgt;
+  let txt=`Hedef alım ~${tgt} kcal. `;
+  if(intake>tgt) txt+=`Bugün hedefin ${intake-tgt} kcal üzerine çıktın.`;
+  else if(intake<tgt) txt+=`Bugün hedefin ${tgt-intake} kcal altındasın.`;
+  else txt+=`Tam hedefte.`;
+  document.getElementById("netExplain").textContent=txt;
+}
+
+/* ===========================================================================
+   ERTESİ GÜN PROGRAMI (öğün planı + spor)
+=========================================================================== */
+function buildMeal(bankName, targetCal){
+  const pool=[...MEAL_BANK[bankName]].sort(()=>Math.random()-0.5);
+  const chosen=[]; let sum=0;
+  for(const it of pool){
+    if(sum>=targetCal*0.9) break;
+    if(sum+it.cal<=targetCal*1.15){chosen.push(it);sum+=it.cal;}
+  }
+  if(chosen.length===0&&pool.length){chosen.push(pool[0]);sum=pool[0].cal;}
+  return {items:chosen,sum};
+}
+function renderTomorrow(){
+  const el=document.getElementById("tomorrowPlan");
+  const pl=computePlan();
+  const d=dayData();
+  const todayIntake=calcIntake(d);
+
+  if(!pl.valid){
+    el.innerHTML='<p class="muted">Önce yukarıdan profil ve hedef bilgilerini kaydedin — program ona göre oluşturulur.</p>';
+    return;
+  }
+
+  // Yarının hedef alımı: temel hedef. Bugün fazla alındıysa bir miktar telafi düş.
+  let tgt=pl.dailyTarget;
+  let note="";
+  if(todayIntake > tgt+150){
+    const over=todayIntake-tgt;
+    const adj=Math.min(over, 250);                 // en fazla 250 kcal telafi
+    tgt=Math.max((pl.minCal||1200), tgt-adj);
+    note=`Bugün hedefin ${over} kcal üzerine çıktığın için yarının hedefini telafi amacıyla ${adj} kcal düşürdüm.`;
+  }
+
+  // Tahmini gün etiketi
+  const nextDay=new Date(addDays(currentDate,1)+"T00:00:00")
+    .toLocaleDateString("tr-TR",{weekday:"long",day:"2-digit",month:"long"});
+
+  // ---- Öğün planı ----
+  let mealsHtml="", total=0;
+  for(const m of ["Kahvaltı","Öğle","Ara öğün","Akşam"]){
+    const mealTgt=Math.round(tgt*MEAL_SHARE[m]);
+    const meal=buildMeal(m,mealTgt);
+    total+=meal.sum;
+    mealsHtml+=`<div class="meal"><div class="mh"><span>${m}</span><span>~${meal.sum} kcal</span></div>
+      <ul>${meal.items.map(it=>`<li>${it.name} — ${it.cal} kcal</li>`).join("")}</ul></div>`;
+  }
+
+  // ---- Spor planı ----
+  // Hedeflenen günlük açığın bir kısmını egzersizle kapatma önerisi
+  let exBurn=200;
+  if(pl.hasGoal) exBurn=Math.min(350, Math.max(150, Math.round(pl.deficitNeeded*0.4)));
+  const walkMin=Math.round(exBurn/SPORTS["Tempolu yürüyüş"]);   // tempolu yürüyüş süresi
+  const fitMin =Math.round(exBurn/SPORTS["Fitness / Ağırlık"]); // fitness süresi
+  const stepGoal=10000;
+
+  let goalLine = pl.hasGoal
+    ? `🎯 Hedefin: <b>${db.plan.days} günde ${db.plan.lossKg} kg</b> → günde ~${pl.deficitNeeded} kcal açık.`
+    : `🎯 Kilonu koruma seviyesi ~${pl.tdee} kcal.`;
+
+  el.innerHTML=`
+    <div class="goalbox">${goalLine}<br>
+      <b>${nextDay}</b> için önerilen alım: <b>~${tgt} kcal</b> (plan toplamı ~${total} kcal).</div>
+    ${note?`<div class="warn">ℹ️ ${note}</div>`:""}
+    <h3 style="color:var(--text);">🍱 Öğün Planı</h3>
+    ${mealsHtml}
+    <h3 style="color:var(--text);">🏃 Spor & Hareket Önerisi</h3>
+    <div class="tip">🚶 Adım hedefi: <b>${stepGoal.toLocaleString("tr-TR")} adım</b> (~${Math.round(stepGoal*KCAL_PER_STEP)} kcal).</div>
+    <div class="tip">Aşağıdakilerden <b>birini</b> seç (~${exBurn} kcal):<br>
+      • ${walkMin} dk tempolu yürüyüş<br>
+      • ${fitMin} dk fitness / ağırlık antrenmanı</div>
+    <p class="muted">Plan her yenilemede farklı öğün kombinasyonu üretir; "🔄 Planı Yenile" ile değiştirebilirsin.</p>`;
+}
+
+/* ===========================================================================
+   GRAFİK (son 7 gün net kalori)
+=========================================================================== */
+function renderChart(){
+  const cv=document.getElementById("chart"),ctx=cv.getContext("2d"),W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  const days=[],base=new Date(currentDate+"T00:00:00");
+  for(let i=6;i>=0;i--){const dd=new Date(base);dd.setDate(base.getDate()-i);
+    const key=dd.toISOString().slice(0,10),rec=db.days[key];
+    days.push({net:rec?calcNet(rec):0,label:(dd.getMonth()+1)+"/"+dd.getDate()});}
+  const maxAbs=Math.max(500,...days.map(d=>Math.abs(d.net)));
+  const padB=28,padT=16,midY=padT+(H-padT-padB)/2,barW=W/days.length*0.55,gap=W/days.length;
+  const cs=getComputedStyle(document.documentElement);
+  const cG=cs.getPropertyValue("--green").trim(),cR=cs.getPropertyValue("--red").trim(),
+        cM=cs.getPropertyValue("--muted").trim(),cB=cs.getPropertyValue("--border").trim();
+  ctx.strokeStyle=cB;ctx.beginPath();ctx.moveTo(0,midY);ctx.lineTo(W,midY);ctx.stroke();
+  ctx.font="11px sans-serif";ctx.textAlign="center";
+  days.forEach((d,i)=>{const cx=gap*i+gap/2,h=(Math.abs(d.net)/maxAbs)*(H-padT-padB)/2;
+    ctx.fillStyle=d.net>0?cR:cG;
+    if(d.net>0)ctx.fillRect(cx-barW/2,midY-h,barW,h); else ctx.fillRect(cx-barW/2,midY,barW,h);
+    ctx.fillStyle=cM; if(d.net!==0)ctx.fillText(d.net,cx,d.net>0?midY-h-4:midY+h+12);
+    ctx.fillText(d.label,cx,H-8);});
+}
+
+/* ===========================================================================
+   GEÇMİŞ
+=========================================================================== */
+function renderHistory(){
+  const keys=Object.keys(db.days).sort().reverse();
+  const h=document.getElementById("history");
+  if(keys.length===0){h.innerHTML='<p class="empty">Henüz kayıt yok.</p>';return;}
+  h.innerHTML="";
+  keys.forEach(k=>{const rec=db.days[k],net=calcNet(rec);
+    const dt=new Date(k+"T00:00:00").toLocaleDateString("tr-TR",{day:"2-digit",month:"short",year:"numeric"});
+    const cls=net>0?"pos":"neg",sign=net>0?"+":"";
+    h.innerHTML+=`<div class="hist-row" onclick="jumpTo('${k}')">
+      <span>${dt}${k===currentDate?' • <b>seçili</b>':''}</span>
+      <span class="badge ${cls}">Net ${sign}${net} kcal</span></div>`;});
+}
+function jumpTo(k){currentDate=k;document.getElementById("datePicker").value=k;resetEdit();render();window.scrollTo({top:0,behavior:"smooth"});}
+
+/* ===========================================================================
+   KARANLIK MOD + yardımcılar
+=========================================================================== */
+function setTheme(m){document.documentElement.setAttribute("data-theme",m);
+  document.getElementById("themeBtn").textContent=m==="dark"?"☀️ Açık Mod":"🌙 Karanlık Mod";db.theme=m;}
+function toggleTheme(){const c=document.documentElement.getAttribute("data-theme");
+  setTheme(c==="dark"?"light":"dark");saveDB();renderChart();}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+init();
+</script>
+</body>
+</html>
